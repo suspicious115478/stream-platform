@@ -1,0 +1,17 @@
+{
+  "name": "stream-platform",
+  "version": "1.0.0",
+  "description": "Upload a video -> auto-loop it as a live RTMP feed -> auto-transmux to HLS (.m3u8) -> serve the m3u8 URL",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "ffmpeg-static": "^5.2.0",
+    "multer": "^1.4.5-lts.1",
+    "node-media-server": "2.4.9",
+    "uuid": "^9.0.1"
+  }
+}
