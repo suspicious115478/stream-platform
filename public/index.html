@@ -121,6 +121,14 @@
       <button class="btn-primary" id="uploadBtn">Upload &amp; start stream</button>
     </div>
     <progress id="progressBar" value="0" max="100" style="display:none;"></progress>
+
+    <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--panel-border);">
+      <p style="font-size:13px; color:var(--muted); margin:0 0 10px;">Ya ek direct video file link paste karo (sirf .mp4/.mov/.webm jaisi direct file links — YouTube/Instagram links kaam nahi karengi):</p>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="urlInput" placeholder="https://example.com/myvideo.mp4" style="flex:1; padding:10px; border-radius:8px; border:1px solid var(--panel-border); background:#0d0f12; color:var(--text); font-size:13px;">
+        <button class="btn-primary" id="urlBtn">Fetch &amp; start stream</button>
+      </div>
+    </div>
   </div>
 
   <div class="panel">
@@ -175,8 +183,46 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
-uploadBtn.addEventListener('click', async () => {
-  if (!selectedFile) return;
+const urlInput = document.getElementById('urlInput');
+const urlBtn = document.getElementById('urlBtn');
+
+urlBtn.addEventListener('click', async () => {
+  const url = urlInput.value.trim();
+  if (!url) { showToast('Pehle ek URL daalo.'); return; }
+
+  urlBtn.disabled = true;
+  urlBtn.textContent = 'Fetching…';
+
+  try {
+    const fetchRes = await fetch(`${API}/api/fetch-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const fetchData = await fetchRes.json();
+    if (!fetchData.success) throw new Error(fetchData.message || 'Failed to fetch URL');
+
+    urlBtn.textContent = 'Starting stream…';
+    const res = await fetch(`${API}/api/streams`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId: fetchData.fileId })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Failed to start stream');
+
+    showToast('Stream started — .m3u8 will be ready in a few seconds');
+    urlInput.value = '';
+    setTimeout(loadStreams, 3000);
+  } catch (err) {
+    showToast('Error: ' + err.message);
+  } finally {
+    urlBtn.disabled = false;
+    urlBtn.textContent = 'Fetch & start stream';
+  }
+});
+
+uploadBtn.addEventListener('click', async () => {  if (!selectedFile) return;
   uploadBtn.disabled = true;
   uploadBtn.textContent = 'Uploading…';
   progressBar.style.display = 'block';
