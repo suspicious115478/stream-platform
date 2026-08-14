@@ -135,7 +135,7 @@ app.post('/api/fetch-url', async (req, res) => {
     }
 
     const contentType = response.headers.get('content-type') || '';
-    const looksLikeVideoExt = /\.(mp4|mov|mkv|webm|avi|m4v)(\?|$)/i.test(parsed.pathname);
+    const looksLikeVideoExt = /\.(mp4|mov|mkv|webm|avi|m4v|flv|wmv|ts|3gp)(\?|$)/i.test(parsed.pathname);
     if (!contentType.startsWith('video/') && !looksLikeVideoExt) {
       return res.status(400).json({
         success: false,
@@ -179,14 +179,20 @@ app.post('/api/streams', (req, res) => {
 
   // -stream_loop -1  => loop the input file forever
   // -re              => read input at native frame rate (needed for "live" pacing)
-  // -c copy           => no re-encode (fast, cheap) - requires the upload to
-  //                      already be a reasonably standard mp4/h264+aac file.
-  //                      Swap to re-encode args below if inputs are inconsistent.
+  // We ALWAYS re-encode to H.264 (video) + AAC (audio) here rather than
+  // "-c copy", so that any input format/codec (webm, mkv, hevc, whatever)
+  // reliably works over RTMP/HLS. This costs more CPU per stream than a
+  // straight copy, but avoids failures from incompatible source codecs.
   const args = [
     '-stream_loop', '-1',
     '-re',
     '-i', filePath,
-    '-c', 'copy',
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac',
+    '-ar', '44100',
+    '-b:a', '128k',
     '-f', 'flv',
     rtmpTarget
   ];
