@@ -68,6 +68,7 @@ nms.run();
 // 2. Express app (this is the ONLY port Render exposes publicly)
 // ---------------------------------------------------------------
 const app = express();
+app.set('trust proxy', 1); // needed on Render so req.protocol reports "https" correctly
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
