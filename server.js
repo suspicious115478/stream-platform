@@ -68,7 +68,7 @@ nms.run();
 // 2. Express app (this is the ONLY port Render exposes publicly)
 // ---------------------------------------------------------------
 const app = express();
-app.set('trust proxy', 1); // needed on Render so req.protocol reports "https" correctly
+app.set('trust proxy', 1); // needed on Render/Heroku-style proxies so req.protocol reports "https" correctly
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
@@ -109,7 +109,56 @@ app.post('/api/upload', upload.single('video'), (req, res) => {
 });
 
 // -----------------------------------------------------------------
-// POST /api/streams   body: { fileId: "<returned from upload>" }
+// POST /api/fetch-url   body: { url: "https://.../video.mp4" }
+// Downloads a direct video file link (must be a file YOU own/have
+// rights to — never a YouTube/Instagram/etc. page link) and saves
+// it to the uploads folder, returning a fileId usable with
+// POST /api/streams exactly like a normal upload.
+// -----------------------------------------------------------------
+app.post('/api/fetch-url', async (req, res) => {
+  const { url } = req.body;
+  if (!url) {
+    return res.status(400).json({ success: false, message: 'url is required.' });
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return res.status(400).json({ success: false, message: 'That is not a valid URL.' });
+  }
+
+  try {
+    const response = await fetch(parsed.toString());
+    if (!response.ok || !response.body) {
+      return res.status(400).json({ success: false, message: `Could not fetch the URL (HTTP ${response.status}).` });
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    const looksLikeVideoExt = /\.(mp4|mov|mkv|webm|avi|m4v)(\?|$)/i.test(parsed.pathname);
+    if (!contentType.startsWith('video/') && !looksLikeVideoExt) {
+      return res.status(400).json({
+        success: false,
+        message: 'That URL does not look like a direct video file link. Only direct .mp4/.mov/.webm/etc. file links are supported — not YouTube/Instagram/Facebook page links.'
+      });
+    }
+
+    const ext = path.extname(parsed.pathname) || '.mp4';
+    const fileId = `${uuidv4()}${ext}`;
+    const filePath = path.join(UPLOAD_DIR, fileId);
+
+    const { Readable } = require('stream');
+    const { pipeline } = require('stream/promises');
+    await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(filePath));
+
+    res.json({ success: true, fileId });
+  } catch (err) {
+    console.error('fetch-url error:', err);
+    res.status(500).json({ success: false, message: 'Failed to download the video from that URL: ' + err.message });
+  }
+});
+
+
 // Starts an ffmpeg loop that pushes the uploaded file into the local
 // RTMP ingest as app=live, streamKey=<generated>. NMS auto-transmuxes
 // to HLS. Returns the public m3u8 URL.
